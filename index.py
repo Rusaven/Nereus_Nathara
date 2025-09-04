@@ -1,44 +1,129 @@
 import streamlit as st
 import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
 import cv2
-import math
+import random
 import time
+import os
 from datetime import datetime
+import matplotlib.pyplot as plt
+from streamlit_autorefresh import st_autorefresh
 
-# Title
+# Config for auto refresh
 st.set_page_config(page_title="Robot Monitoring System", layout="wide")
+st_autorefresh(interval=1000, key="datarefresh")
 
-# Sidebar
-st.sidebar.title("Control Panel")
-st.sidebar.selectbox("Camera 1", ["Logitech C920", "Realsense RGB", "Depth Camera"])
-st.sidebar.selectbox("Camera 2", ["Logitech C920", "Realsense RGB", "Depth Camera"])
-st.sidebar.selectbox("Mode",     ["Manual", "Autonomous"])
-if "system_active" not in st.session_state:
-    st.session_state.system_active = False
+# Style
+st.markdown("""
+<style>
+div[data-testid="stMetricValue"] {
+    font-size: clamp(16px, 6vw, 22px) !important;
+    color: #2E86C1 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-# Toggle function
-def toggle_system():
-    st.session_state.system_active = not st.session_state.system_active
+###########################
+# Dummy Data Generator
+###########################
+def data_monitoring():
+    now = datetime.now()
+    return {
+        "Day"        : now.strftime("%A"),
+        "Date"       : now.strftime("%d-%m-%Y"),
+        "Time"       : now.strftime("%H:%M:%S"),
+        "Position_X" : random.uniform(0, 2500),
+        "Position_Y" : random.uniform(0, 2500),
+        "Latitude"   : random.uniform(-90, 90),
+        "Longitude"  : random.uniform(-180, 180),
+        "Yaw"        : random.uniform(0, 360),
+        "COG"        : random.uniform(0, 360),
+        "SOG_knot"   : random.uniform(0, 100),
+        "SOG_kmh"    : random.uniform(0, 200),
+        "Etc"        : random.uniform(0, 1000),
+        "Battery"    : [random.uniform(0, 100) for _ in range(5)],
+    }
 
-# Start/Stop button
-if st.sidebar.button("Start" if not st.session_state.system_active else "Stop", on_click=toggle_system):
-    pass
+def data_vision():
+    return {
+        "Greenball_conf"     : random.uniform(0, 0.99),
+        "Redball_conf"       : random.uniform(0, 0.99),
+        "Mangrove_conf"      : random.uniform(0, 0.99),
+        "Fish_conf"          : random.uniform(0, 0.99),
+        "Greenball_dist"     : random.uniform(0.2, 5.0),
+        "Redball_dist"       : random.uniform(0.2, 5.0),
+        "Mangrove_dist"      : random.uniform(0.2, 5.0),
+        "Fish_dist"          : random.uniform(0.2, 5.0),
+        "Avgconf_surface"    : random.uniform(0, 0.99),
+        "Avgconf_underwater" : random.uniform(0, 0.99),
+        "Fps_surface"        : random.uniform(0, 200),
+        "Fps_underwater"     : random.uniform(0, 200),
+    }
 
-# Indicator status
-if st.session_state.system_active:
-    st.sidebar.markdown(
-        "<span style='color: green; font-weight: 500;'>🟢 Active</span>", 
-        unsafe_allow_html=True
-    )
-else:
-    st.sidebar.markdown(
-        "<span style='color: red; font-weight: 500;'>🔴 Deactivate</span>", 
-        unsafe_allow_html=True
-    )
+def data_autonomous():
+    return {
+        "Left_thruster"  : random.uniform(0, 2500),
+        "Right_thruster" : random.uniform(0, 2500),
+        "Bow_thruster"   : random.uniform(0, 2500),
+        "Left_servo"     : random.uniform(-90, 90),
+        "Right_servo"    : random.uniform(-90, 90),
+        "Angular"        : random.uniform(0, 100),
+        "Linear"         : random.uniform(0, 100),
+        "Greenball_auto" : random.choice([True, False]),
+        "Redball_auto"   : random.choice([True, False]),
+        "Command"        : random.choice(["Kiri", "Maju", "Kanan"]),
+        "Zone"           : random.choice(["I", "II", "III"]),
+    }
 
+###########################
+# Floating Ball + Arena
+###########################
+def floating_ball_positions(arena):
+    if arena == "Arena A":
+        green_positions = [(330, 960  ), (330, 1310 ), (450, 1715 ),
+                           (1040, 2250), (1200, 2250), (1360, 2250), (1520, 2250),
+                           (2325, 1465), (2180, 1160), (2260, 855 )]
+        
+        red_positions   = [(180, 960  ), (180, 1310 ), (300, 1715 ),
+                           (1040, 2100), (1200, 2100), (1360, 2100), (1520, 2100),
+                           (2175, 1465), (2030, 1160), (2110, 855 )]
+    else:
+        red_positions   = [(390, 855  ), (470, 1160 ), (325, 1465 ),
+                           (980, 2100 ), (1140, 2100), (1300, 2100), (1460, 2100),
+                           (2200, 1715), (2320, 1310), (2320, 960 )]
+        
+        green_positions = [(240, 855  ), (320, 1160 ), (175, 1465 ),
+                           (980, 2250 ), (1140, 2250), (1300, 2250), (1460, 2250),
+                           (2050, 1715), (2170, 1310), (2170, 960 )]
+        
+    return red_positions, green_positions
+
+def build_static_map(arena):
+    fig, ax = plt.subplots(figsize=(6, 6))
+    ax.set_xlim(0, 2500)
+    ax.set_ylim(0, 2500)
+    ax.grid(True)
+
+    if arena == "Arena A":
+        ax.add_patch(plt.Rectangle((2100, 65) , 170, 100, color='red'  ))
+        ax.add_patch(plt.Rectangle((520 , 300), 100, 50 , color='blue' ))
+        ax.add_patch(plt.Rectangle((300 , 620), 100, 50 , color='green'))
+    else:
+        ax.add_patch(plt.Rectangle((250 , 65) , 170, 100, color='green'))
+        ax.add_patch(plt.Rectangle((1880, 300), 100, 50 , color='blue' ))
+        ax.add_patch(plt.Rectangle((2100, 620), 100, 50 , color='green'))
+
+    red_positions, green_positions = floating_ball_positions(arena)
+    for pos in red_positions:
+        ax.add_patch(plt.Circle(pos, 25, color='red'))
+    for pos in green_positions:
+        ax.add_patch(plt.Circle(pos, 25, color='green'))
+
+    trajectory_line, = ax.plot([], [], color='black', linestyle='--', marker='o', markersize=3)
+    return fig, ax, trajectory_line
+
+###########################
 # Header
+###########################
 st.markdown(
     """
     <h1 style='text-align: center; color: #2E86C1;'>NEREUS NATHARA</h1>
@@ -47,389 +132,116 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-tab1, tab2, tab3 = st.tabs(["Monitoring", "Vision", "Autonomous"]) # Set how many tab
-
-######################
-# TAB 1 | MONITORING #
-######################
-with tab1:
-    with st.container():
-        arena = st.radio("Select Arena:", ["Arena A", "Arena B"], horizontal=True) # Select arena
-
-        col1, col2 = st.columns([2, 2]) # Set column size
-
-        # Column for arena map
-        with col1:
-
-            # Coordinate function
-            def coordinate(arena):
-                fig, ax = plt.subplots(figsize=(8, 8))
-                ax.set_xlim(0, 2500)
-                ax.set_ylim(0, 2500)
-                ax.set_xticks(range(0, 2600, 500))
-                ax.set_yticks(range(0, 2600, 500))
-                ax.grid(True)
-
-                # Decision function | Arena A
-                if arena == "Arena A":
-                    rectangle = plt.Rectangle((2100, 65), 170, 100, color='red', fill=True) # Dock
-                    red_positions, green_positions = floating_ball_positions("Arena A")     # Ball
-
-                    ax.add_patch(rectangle)
-                    ax.add_patch(plt.Rectangle((520, 300), 100, 50, color='blue', fill=True))  # Fish
-                    ax.add_patch(plt.Rectangle((300, 620), 100, 50, color='green', fill=True)) # Mangrove
-
-                    for pos in red_positions:
-                        ax.add_patch(plt.Circle(pos, 25, color='red', fill=True))
-                    for pos in green_positions:
-                        ax.add_patch(plt.Circle(pos, 25, color='green', fill=True))
-
-                # Decision function | Arena B
-                elif arena == "Arena B":
-                    rectangle = plt.Rectangle((250, 65), 170, 100, color='green', fill=True) # Dock
-                    red_positions, green_positions = floating_ball_positions("Arena B")      # Ball
-
-                    ax.add_patch(rectangle)
-                    ax.add_patch(plt.Rectangle((1880, 300), 100, 50, color='blue', fill=True))  # Fish
-                    ax.add_patch(plt.Rectangle((2100, 620), 100, 50, color='green', fill=True)) # Mangrove
-
-                    for pos in red_positions:
-                        ax.add_patch(plt.Circle(pos, 25, color='red', fill=True))
-                    for pos in green_positions:
-                        ax.add_patch(plt.Circle(pos, 25, color='green', fill=True))
-
-                return fig
-
-            # Floating ball positions function
-            def floating_ball_positions(arena):
-
-                # Decision function | Arena A
-                if arena == "Arena A":
-                    green_positions = [(330, 960. ), (330, 1310 ), (450, 1715 ),               # Zone 3
-                                       (1040, 2250), (1200, 2250), (1360, 2250), (1520, 2250), # Zone 2
-                                       (2325, 1465), (2180, 1160), (2260, 855 )]               # Zone 1
-                    
-                    red_positions   = [(180, 960. ), (180, 1310 ), (300, 1715 ),               # Zone 3
-                                       (1040, 2100), (1200, 2100), (1360, 2100), (1520, 2100), # Zone 2
-                                       (2175, 1465), (2030, 1160), (2110, 855 )]               # Zone 1
-                    
-                # Decision function | Arena B
-                elif arena == "Arena B":
-                    red_positions   = [(390, 855  ), (470, 1160 ), (325, 1465 ),               # Zone 1
-                                       (980, 2100 ), (1140, 2100), (1300, 2100), (1460, 2100), # Zone 2
-                                       (2200, 1715), (2320, 1310), (2320, 960 )]               # Zone 3
-                    
-                    green_positions = [(240, 855. ), (320, 1160 ), (175, 1465 ),               # Zone 1
-                                       (980, 2250 ), (1140, 2250), (1300, 2250), (1460, 2250), # Zone 2
-                                       (2050, 1715), (2170, 1310), (2170, 960 )]               # Zone 3
-                    
-                return red_positions, green_positions
-
-            # Call function
-            fig = coordinate(arena)
-            st.pyplot(fig, width='stretch')
-
-        # Column for information
-        with col2:
-            st.subheader("Monitoring Info")
-
-            subcol1, subcol2 = st.columns(2) # Set sub-column size
-
-            # Info
-            with subcol1:
-                day_placeholder      = st.empty() # Day
-                date_placeholder     = st.empty() # Date
-                time_placeholder     = st.empty() # Time
-                position_placeholder = st.empty() # Position
-            
-            # Info
-            with subcol2:
-                sog_knot_placeholder   = st.empty() # SOG (Knot)
-                sog_kmh_placeholder    = st.empty() # SOG (Km/h)
-                coordinate_placeholder = st.empty() # Coordinate
-                cog_placeholder        = st.empty() # COG
-
-            # Data dummy
-            now = datetime.now()
-            current_day  = now.strftime("%A")       # Example: Thursday
-            current_date = now.strftime("%d-%m-%Y") # Example: 28-08-2025
-            current_time = now.strftime("%H:%M:%S") # Example: 12:31:28
-        
-            x = np.random.randint(0, 100) # Data for x position
-            y = np.random.randint(0, 100) # Data for y position
-            
-            latitude  = np.random.randint(0, 100) # Data for latitude
-            lat       = latitude
-            longitude = np.random.randint(0, 100) # Data for longitude
-            long      = longitude
-
-            sog_knot = np.random.randint(0, 100) # Data for SOG (Knot)
-            sog_kmh  = np.random.randint(0, 100) # Data for SOG (Km/h)
-            cog      = np.random.randint(0, 100) # Data for COG
-
-            # Format data
-            day_placeholder.metric      ("Day", current_day)             # Day      
-            date_placeholder.metric     ("Date", current_date)           # Date
-            time_placeholder.metric     ("Time", current_time)           # Time
-            position_placeholder.metric ("Position [X, Y]", f"{x}, {y}") # Position
-
-            coordinate_placeholder.metric ("Coordinate [Lat, Long]", f"{lat}, {long}") # Coordinate
-            sog_knot_placeholder.metric   ("SOG [Knot]", f"{sog_knot:.2f} kn")         # SOG (Knot)
-            sog_kmh_placeholder.metric    ("SOG [Km/h]", f"{sog_kmh:.2f} km/h")        # SOG (Km/h)
-            cog_placeholder.metric        ("COG", f"{cog:.1f} °")                      # COG
-
-    with st.container():
-        col1, col2 = st.columns([1,1]) # Set column size
-        
-        # Mangrove pic
-        with col1:
-            st.subheader("Mangrove picture")
-            mangrove_pic_placeholder = st.empty()
-
-        # Fish pic
-        with col2:
-            st.subheader("Fish picture")
-            fish_pic_placeholder = st.empty()
-        
-        # Picture simulation
-        img = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        mangrove_pic_placeholder.image (img, channels="RGB", width='stretch')
-        fish_pic_placeholder.image     (img, channels="RGB", width='stretch')
-
-##################
-# TAB 2 | VISION #
-##################
-with tab2:
-    # Vision display
-    with st.container():
-        col1, col2 = st.columns([1, 1])
-
-        # Display
-        with col1:
-            st.subheader("Surface Camera")
-            cam_surface_placeholder = st.empty()
-        # Display
-        with col2:
-            st.subheader("Underwater Camera")
-            cam_underwater_placeholder = st.empty()
-
-    # Vision information
-    with st.container():
-        col1, col2 = st.columns([1, 1]) # Set column size
-
-        with col1:
-            st.subheader("Surface Vision Info")
-
-            subcol1, subcol2 = st.columns(2) # Set sub-column size
-
-            # Info
-            with subcol1:
-                greenball_placeholder       = st.empty() # Green Ball Conf
-                redball_placeholder         = st.empty() # Red Ball Conf
-                mangrove_placeholder        = st.empty() # Mangrove Conf
-                avgconf_surface_placeholder = st.empty() # Average Conf
-
-            # Info
-            with subcol2:
-                greendist_placeholder    = st.empty() # Green Ball Dist
-                reddist_placeholder      = st.empty() # Red Ball Dist
-                mangrovedist_placeholder = st.empty() # Mangrove Dist
-                fps_surface_placeholder  = st.empty() # FPS
-
-        with col2:
-            st.subheader("Underwater Vision Info")
-
-            subcol1, subcol2 = st.columns(2) # Set sub-column size
-
-            # Info
-            with subcol1:
-                fish_placeholder               = st.empty() # Fish Conf
-                avgconf_underwater_placeholder = st.empty() # Average conf
-
-            # Info
-            with subcol2:
-                fishdist_placeholder       = st.empty() # Fish Distance
-                fps_underwater_placeholder = st.empty() # FPS
-
-    start_time = time.time()
-
-    # Camera simulation
-    img = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    cam_surface_placeholder.image    (img, channels="RGB", width='stretch')
-    cam_underwater_placeholder.image (img, channels="RGB", width='stretch')
-
-    # Data dummy
-    dist_class1 = np.random.uniform(0.1, 5.0) # Dist class 1
-    dist_class2 = np.random.uniform(0.1, 5.0) # Dist class 2
-    dist_class3 = np.random.uniform(0.1, 5.0) # Dist class 3
-    dist_class4 = np.random.uniform(0.1, 5.0) # Dist class 4
-
-    conf_class1 = np.random.uniform(0.1, 1.0) # Conf class 1
-    conf_class2 = np.random.uniform(0.1, 1.0) # Conf class 2
-    conf_class3 = np.random.uniform(0.1, 1.0) # Conf class 3
-    conf_class4 = np.random.uniform(0.1, 1.0) # Conf class 4
-
-    fps = round(1.0 / (time.time() - start_time), 1) # FPS Calculation
-    start_time = time.time()
-
-    avg_conf = np.random.uniform(0.1, 1.0) # Average conf
-
-    # Format data
-    fps_surface_placeholder.metric     ("FPS", f"{fps}")               # FPS surface camera
-    avgconf_surface_placeholder.metric ("Avg Conf", f"{avg_conf:.2f}") # Avg conf surface camera
-
-    fps_underwater_placeholder.metric     ("FPS", f"{fps}")               # FPS underwater camera
-    avgconf_underwater_placeholder.metric ("Avg Conf", f"{avg_conf:.2f}") # Avg conf underwater camera
-
-    greenball_placeholder.metric ("Green Ball Conf", f"{conf_class1:.2f}") # Green ball conf
-    redball_placeholder.metric   ("Red Ball Conf", f"{conf_class2:.2f}")   # Red ball conf
-    mangrove_placeholder.metric  ("Mangrove Conf", f"{conf_class3:.2f}")   # Mangrove conf
-    fish_placeholder.metric      ("Fish Conf", f"{conf_class4:.2f}")       # Fish conf
-
-    greendist_placeholder.metric    ("Green Ball Dist", f"{dist_class1:.2f} m") # Green ball dist
-    reddist_placeholder.metric      ("Red Ball Dist", f"{dist_class2:.2f} m")   # Red ball dist
-    mangrovedist_placeholder.metric ("Mangrove Dist", f"{dist_class3:.2f} m")   # Mangrove dist
-    fishdist_placeholder.metric     ("Fish Dist", f"{dist_class4:.2f} m")       # Fish dist
-
-######################
-# TAB 3 | AUTONOMOUS #
-######################
-with tab3:
-    with st.container():
-        col1, col2 = st.columns([1, 1])
-
-        with col1:
-            st.subheader("Camera")
-            zone_placeholder = st.empty()
-            cam_auto_placeholder = st.empty()
-
-            # Camera simulation
-            img = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-            cam_auto_placeholder.image(img, channels="RGB", width='stretch')
-
-        with col2:
-            st.subheader("Navigation")
-
-            subcol1, subcol2, subcol3 = st.columns(3)
-
-            with subcol1:
-                left_thruster_placeholder = st.empty()
-                left_servo_placeholder    = st.empty()
-                redball_auto_placeholder  = st.empty()
-                angular_placeholder       = st.empty()
-
-            with subcol2:
-                bow_thruster_placeholder  = st.empty()
-                command_placeholder       = st.empty()
-
-            with subcol3:
-                right_thruster_placeholder = st.empty()
-                right_servo_placeholder    = st.empty()
-                greenball_auto_placeholder = st.empty()
-                linear_placeholder         = st.empty()
-
-            angular_value        = np.random.uniform(0, 100)
-            linear_value         = np.random.uniform(0, 100)
-
-            left_thruster_value  = np.random.uniform(0, 100)
-            bow_thruster_value   = np.random.uniform(0, 100)
-            right_thruster_value = np.random.uniform(0, 100)
-
-            left_servo_value     = np.random.uniform(0, 100)
-            right_servo_value    = np.random.uniform(0, 100)
-
-            commands             = ["Maju", "Kanan", "Kiri", "Berputar", "Berhenti"]
-            command_value        = np.random.choice(commands)
-
-            greenball            = ["True", "False"]
-            greenball_value      = np.random.choice(greenball)
-
-            redball              = ["True", "False"]
-            redball_value        = np.random.choice(redball )
-
-            st.markdown(
-                """
-                <style>
-                /* Ubah semua label metric */
-                div[data-testid="stMetricLabel"] {
-                    font-size: 14px !important;
-                    color: red !important;
-                }
-
-                /* Ubah semua value metric */
-                div[data-testid="stMetricValue"] {
-                    font-size: clamp(12px, 2vw, 18px); !important;
-                    color: red !important;
-                }
-                </style>
-                """,
-                unsafe_allow_html=True
-            )
-
-            angular_placeholder.metric        ("Angular", f"{angular_value:.0f}")
-            linear_placeholder.metric         ("Linear", f"{linear_value:.0f}")
-
-            left_thruster_placeholder.metric  ("Left thruster", f"{left_thruster_value:.0f} Km/h")
-            bow_thruster_placeholder.metric   ("Bow thruster", f"{bow_thruster_value:.0f} Km/h")
-            right_thruster_placeholder.metric ("Right thruster", f"{right_thruster_value:.0f} Km/h")
-
-            left_servo_placeholder.metric     ("Left servo", f"{left_servo_value:.0f} °")
-            right_servo_placeholder.metric    ("Right servo", f"{right_servo_value:.0f} °")
-
-            command_placeholder.metric        ("Command", command_value)
-
-            greenball_auto_placeholder.metric ("Greenball", greenball_value)
-            redball_auto_placeholder.metric   ("Redball", redball_value)
-
-    with st.container():
-        col1, col2 = st.columns([1,1])
-        
-        with col1:
-            st.subheader("Sensor")
-
-            subcol1, subcol2 = st.columns(2)
-
-            with subcol1:
-                gps_placeholder = st.empty()
-                imu_placeholder = st.empty()
-
-            with subcol2:
-                etc_placeholder = st.empty()
-
-            x         = np.random.uniform(0, 100)
-            y         = np.random.uniform(0, 100)
-            imu_value = np.random.uniform(0, 360)
-            etc_value = np.random.uniform(0, 100)
-
-            gps_placeholder.metric ("GPS [X, Y]", f"{x:.0f}, {y:.0f}")
-            imu_placeholder.metric ("IMU", f"{imu_value:.1f} °")
-            etc_placeholder.metric ("ETC", f"{etc_value:.0f}")
-
-        with col2:
-            st.subheader("Hardware Condition")
-
-            subcol1, subcol2 = st.columns(2)
-
-            with subcol1:
-                battery1_placeholder = st.empty()
-                battery2_placeholder = st.empty()
-                battery3_placeholder = st.empty()
-
-            with subcol2:
-                battery4_placeholder = st.empty()
-                battery5_placeholder = st.empty()
-
-            percentage_battery1 = np.random.uniform(0, 100)
-            percentage_battery2 = np.random.uniform(0, 100)
-            percentage_battery3 = np.random.uniform(0, 100)
-            percentage_battery4 = np.random.uniform(0, 100)
-            percentage_battery5 = np.random.uniform(0, 100)
-
-            battery1_placeholder.metric ("Battery 1 - Bow Thruster", f"{percentage_battery1:.1f} %")
-            battery2_placeholder.metric ("Battery 2 - Right Thruster", f"{percentage_battery2:.1f} %")
-            battery3_placeholder.metric ("Battery 3 - Left Thruster", f"{percentage_battery3:.1f} %")
-            battery4_placeholder.metric ("Battery 4 - PC", f"{percentage_battery4:.1f} %")
-            battery5_placeholder.metric ("Battery 5 - Microcontroller", f"{percentage_battery5:.1f} %")
+###########################
+# Layout
+###########################
+col1, col2 = st.columns([2, 2])
+
+# === LEFT SIDE ===
+with col1:
+    st.subheader("Arena")
+    arena = st.radio("Select Arena:", ["Arena A", "Arena B"], horizontal=True)
+
+    if ("map_fig" not in st.session_state) or (st.session_state.get("arena_name") != arena):
+        fig, ax, trajectory_line = build_static_map(arena)
+        st.session_state.map_fig = fig
+        st.session_state.map_ax = ax
+        st.session_state.trajectory_line = trajectory_line
+        st.session_state.trajectory_x = []
+        st.session_state.trajectory_y = []
+        st.session_state.arena_name = arena
+
+    data_m = data_monitoring()
+    x, y = data_m["Position_X"], data_m["Position_Y"]
+    st.session_state.trajectory_x.append(x)
+    st.session_state.trajectory_y.append(y)
+    st.session_state.trajectory_line.set_data(st.session_state.trajectory_x, st.session_state.trajectory_y)
+
+    st.pyplot(st.session_state.map_fig, clear_figure=False)
+
+    st.subheader("Live Cameras")
+    cam_col1, cam_col2 = st.columns(2)
+    dummy_img = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
+    with cam_col1:
+        st.image(dummy_img, channels="RGB", caption="Surface Cam", width="stretch")
+    with cam_col2:
+        st.image(dummy_img, channels="RGB", caption="Underwater Cam", width="stretch")
+
+    st.subheader("Pictures")
+    cam_col1, cam_col2 = st.columns(2)
+
+    surface_path = os.path.join(os.path.dirname(__file__), "Mangrove.jpg")
+    underwater_path = os.path.join(os.path.dirname(__file__), "Fish.jpg")
+
+    surface_img = cv2.imread(surface_path)
+    underwater_img = cv2.imread(underwater_path)
+
+    if surface_img is not None:
+        surface_img = cv2.cvtColor(surface_img, cv2.COLOR_BGR2RGB)
+        with cam_col1:
+            st.image(surface_img, channels="RGB", caption="Surface Cam", width="stretch")
+    else:
+        with cam_col1:
+            st.error("Surface image not found")
+
+    if underwater_img is not None:
+        underwater_img = cv2.cvtColor(underwater_img, cv2.COLOR_BGR2RGB)
+        with cam_col2:
+            st.image(underwater_img, channels="RGB", caption="Underwater Cam", width="stretch")
+    else:
+        with cam_col2:
+            st.error("Underwater image not found")
+
+# === RIGHT SIDE ===
+with col2:
+    st.subheader("System Info")
+    data_v = data_vision()
+    data_a = data_autonomous()
+
+    # Monitoring
+    with st.expander("Monitoring"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Day"     , data_m["Day"])
+            st.metric("Date"    , data_m["Date"])
+            st.metric("Time"    , data_m["Time"])
+            st.metric("Position", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
+        with c2:
+            st.metric("Lat/Long", f"{data_m['Latitude'  ]:.2f}, {data_m['Longitude']:.2f}")
+            st.metric("SOG Knot", f"{data_m['SOG_knot'  ]:.1f} kn")
+            st.metric("SOG Km/h", f"{data_m['SOG_kmh'   ]:.1f} km/h")
+            st.metric("COG"     , f"{data_m['COG'       ]:.1f} °")
+
+    # Vision
+    with st.expander("Vision"):
+        c1, c2 = st.columns(2)
+        with c1:
+            st.metric("Green Ball Conf", f"{data_v['Greenball_conf']:.2f}")
+            st.metric("Red Ball Conf"  , f"{data_v['Redball_conf'  ]:.2f}")
+            st.metric("Mangrove Conf"  , f"{data_v['Mangrove_conf' ]:.2f}")
+            st.metric("Fish Conf"      , f"{data_v['Fish_conf'     ]:.2f}")
+        with c2:
+            st.metric("Green Ball Dist", f"{data_v['Greenball_dist']:.2f} m")
+            st.metric("Red Ball Dist"  , f"{data_v['Redball_dist'  ]:.2f} m")
+            st.metric("Mangrove Dist"  , f"{data_v['Mangrove_dist' ]:.2f} m")
+            st.metric("Fish Dist"      , f"{data_v['Fish_dist'     ]:.2f} m")
+
+    # Autonomous
+    with st.expander("Autonomous"):
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.metric("Left Thruster"  , f"{data_a['Left_thruster' ]:.0f} RPM")
+            st.metric("Left Servo"     , f"{data_a['Left_servo'    ]:.0f} °")
+        with c2:
+            st.metric("Bow Thruster"   , f"{data_a['Bow_thruster'  ]:.0f} RPM")
+            st.metric("Zone"           , data_a["Zone"])
+            st.metric("Command"        , data_a["Command"])
+        with c3:
+            st.metric("Right Thruster" , f"{data_a['Right_thruster']:.0f} RPM")
+            st.metric("Right Servo"    , f"{data_a['Right_servo'   ]:.0f} °")
+
+    # Hardware
+    with st.expander("Hardware"):
+        bat_c1, bat_c2 = st.columns(2)
+        for i in range(5):
+            (bat_c1 if i < 3 else bat_c2).metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
