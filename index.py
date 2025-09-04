@@ -240,15 +240,15 @@ with col2:
             st.metric("Right Thruster" , f"{data_a['Right_thruster']:.0f} RPM")
             st.metric("Right Servo"    , f"{data_a['Right_servo'   ]:.0f} °")
 
-    # ETC, Yaw & GPS
-    with st.expander("GPS, Yaw & ETC"):
+    # Lokalisasi
+    with st.expander("Lokalisasi"):
         c1, c2, c3 = st.columns(3)
         with c1:
             st.metric("GPS (X,Y)", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
         with c2:
-            st.metric("Yaw", f"{data_m['Yaw']:.1f} °")
+            st.metric("Yaw"      , f"{data_m['Yaw']:.1f} °")
         with c3:
-            st.metric("ETC", f"{data_m['Etc']:.1f}")
+            st.metric("ETC"      , f"{data_m['Etc']:.1f}")
 
     # Hardware
     with st.expander("Hardware"):
