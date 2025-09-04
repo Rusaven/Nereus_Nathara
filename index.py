@@ -205,7 +205,7 @@ with col2:
             st.metric("Day"     , data_m["Day"])
             st.metric("Date"    , data_m["Date"])
             st.metric("Time"    , data_m["Time"])
-            st.metric("Position", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
+            st.metric("Position [x, y]", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
         with c2:
             st.metric("Lat/Long", f"{data_m['Latitude'  ]:.2f}, {data_m['Longitude']:.2f}")
             st.metric("SOG Knot", f"{data_m['SOG_knot'  ]:.1f} kn")
@@ -244,7 +244,7 @@ with col2:
     with st.expander("Localization"):
         c1, c2, c3 = st.columns(3)
         with c1:
-            st.metric("GPS (X,Y)", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
+            st.metric("GPS [x, y]", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
         with c2:
             st.metric("Yaw"      , f"{data_m['Yaw']:.1f} °")
         with c3:
