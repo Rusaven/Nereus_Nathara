@@ -252,6 +252,12 @@ with col2:
 
     # Hardware
     with st.expander("Hardware"):
-        bat_c1, bat_c2 = st.columns(2)
+        bat_c1, bat_c2, bat_c3 = st.columns(3)
         for i in range(5):
-            (bat_c1 if i < 3 else bat_c2).metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
+            if i < 2:
+                bat_c1.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
+            elif i < 4:
+                bat_c2.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
+            else:
+                bat_c3.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
+
