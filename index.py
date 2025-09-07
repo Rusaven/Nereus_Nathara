@@ -7,6 +7,7 @@ import os
 from datetime import datetime
 import matplotlib.pyplot as plt
 from streamlit_autorefresh import st_autorefresh
+import requests
 
 # Config for auto refresh
 st.set_page_config(page_title="Robot Monitoring System", layout="wide")
@@ -21,6 +22,24 @@ div[data-testid="stMetricValue"] {
 }
 </style>
 """, unsafe_allow_html=True)
+
+
+###########################
+# Back4App Connection
+###########################
+BASE_URL    = "https://parseapi.back4app.com/classes/NereusNathara"
+headers     = {
+        "X-Parse-Application-Id"    :'G8ywQkYC82dwuwSPpUWUo4Q7cVWbCOZhlyLTflgN',
+        "X-Parse-REST-API-Key"      :'b6Xm6nc3J7qjaNLzjoUvIovvOqjTkSbmtray1t6R',
+    }
+
+def backend_data():
+    response = requests.get(BASE_URL, headers=headers, params={"order": "-createdAt", "limit": 1})
+    if response.status_code == 200:
+        return response.json().get("results", [])
+    else:
+        st.error(f"Failed: {response.status_code}")
+        return []
 
 ###########################
 # Dummy Data Generator
