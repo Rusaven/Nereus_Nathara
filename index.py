@@ -35,12 +35,17 @@ def data_monitoring():
         "Position_Y" : random.uniform(0, 2500),
         "Latitude"   : random.uniform(-90, 90),
         "Longitude"  : random.uniform(-180, 180),
-        "Yaw"        : random.uniform(0, 360),
-        "COG"        : random.uniform(0, 360),
         "SOG_knot"   : random.uniform(0, 100),
         "SOG_kmh"    : random.uniform(0, 200),
+        "COG"        : random.uniform(0, 360),
+
+        "Yaw"        : random.uniform(0, 360),
         "Etc"        : random.uniform(0, 1000),
-        "Battery"    : [random.uniform(0, 100) for _ in range(5)],
+        "Battery1"        : random.uniform(0, 100),
+        "Battery2"        : random.uniform(0, 100),
+        "Battery3"        : random.uniform(0, 100),
+        "Battery4"        : random.uniform(0, 100),
+        "Battery5"        : random.uniform(0, 100),
     }
 
 def data_vision():
@@ -49,14 +54,10 @@ def data_vision():
         "Redball_conf"       : random.uniform(0, 0.99),
         "Mangrove_conf"      : random.uniform(0, 0.99),
         "Fish_conf"          : random.uniform(0, 0.99),
+
         "Greenball_dist"     : random.uniform(0.2, 5.0),
         "Redball_dist"       : random.uniform(0.2, 5.0),
         "Mangrove_dist"      : random.uniform(0.2, 5.0),
-        "Fish_dist"          : random.uniform(0.2, 5.0),
-        "Avgconf_surface"    : random.uniform(0, 0.99),
-        "Avgconf_underwater" : random.uniform(0, 0.99),
-        "Fps_surface"        : random.uniform(0, 200),
-        "Fps_underwater"     : random.uniform(0, 200),
     }
 
 def data_autonomous():
@@ -68,8 +69,6 @@ def data_autonomous():
         "Right_servo"    : random.uniform(-90, 90),
         "Angular"        : random.uniform(0, 100),
         "Linear"         : random.uniform(0, 100),
-        "Greenball_auto" : random.choice([True, False]),
-        "Redball_auto"   : random.choice([True, False]),
         "Command"        : random.choice(["Kiri", "Maju", "Kanan"]),
         "Zone"           : random.choice(["I", "II", "III"]),
     }
@@ -135,10 +134,11 @@ st.markdown(
 ###########################
 # Layout
 ###########################
-col1, col2 = st.columns([2, 2])
+main_col1, main_col2 = st.columns([2, 2])
 
 # === LEFT SIDE ===
-with col1:
+with main_col1:
+    # Arena
     st.subheader("Arena")
     arena = st.radio("Select Arena:", ["Arena A", "Arena B"], horizontal=True)
 
@@ -151,24 +151,26 @@ with col1:
         st.session_state.trajectory_y = []
         st.session_state.arena_name = arena
 
-    data_m = data_monitoring()
-    x, y = data_m["Position_X"], data_m["Position_Y"]
+    monitoring = data_monitoring()
+    x, y = monitoring["Position_X"], monitoring["Position_Y"]
     st.session_state.trajectory_x.append(x)
     st.session_state.trajectory_y.append(y)
     st.session_state.trajectory_line.set_data(st.session_state.trajectory_x, st.session_state.trajectory_y)
 
     st.pyplot(st.session_state.map_fig, clear_figure=False)
 
+    # Cameras
     st.subheader("Live Cameras")
-    cam_col1, cam_col2 = st.columns(2)
+    col1, col2 = st.columns(2)
     dummy_img = np.random.randint(0, 255, (240, 320, 3), dtype=np.uint8)
-    with cam_col1:
+    with col1:
         st.image(dummy_img, channels="RGB", caption="Surface Cam", width="stretch")
-    with cam_col2:
+    with col2:
         st.image(dummy_img, channels="RGB", caption="Underwater Cam", width="stretch")
 
+    # Pictures
     st.subheader("Pictures")
-    cam_col1, cam_col2 = st.columns(2)
+    col1, col2 = st.columns(2)
 
     surface_path = os.path.join(os.path.dirname(__file__), "Mangrove.jpg")
     underwater_path = os.path.join(os.path.dirname(__file__), "Fish.jpg")
@@ -178,86 +180,86 @@ with col1:
 
     if surface_img is not None:
         surface_img = cv2.cvtColor(surface_img, cv2.COLOR_BGR2RGB)
-        with cam_col1:
+        with col1:
             st.image(surface_img, channels="RGB", caption="Surface Cam", width="stretch")
     else:
-        with cam_col1:
+        with col1:
             st.error("Surface image not found")
 
     if underwater_img is not None:
         underwater_img = cv2.cvtColor(underwater_img, cv2.COLOR_BGR2RGB)
-        with cam_col2:
+        with col2:
             st.image(underwater_img, channels="RGB", caption="Underwater Cam", width="stretch")
     else:
-        with cam_col2:
+        with col2:
             st.error("Underwater image not found")
 
 # === RIGHT SIDE ===
-with col2:
+with main_col2:
     st.subheader("System Info")
-    data_v = data_vision()
-    data_a = data_autonomous()
+    monitoring = data_monitoring()
+    vision     = data_vision()
+    autonomous = data_autonomous()
 
     # Monitoring
     with st.expander("Monitoring"):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("Day"     , data_m["Day"])
-            st.metric("Date"    , data_m["Date"])
-            st.metric("Time"    , data_m["Time"])
-            st.metric("Position [x, y]", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
-        with c2:
-            st.metric("Lat/Long", f"{data_m['Latitude'  ]:.2f}, {data_m['Longitude']:.2f}")
-            st.metric("SOG Knot", f"{data_m['SOG_knot'  ]:.1f} kn")
-            st.metric("SOG Km/h", f"{data_m['SOG_kmh'   ]:.1f} km/h")
-            st.metric("COG"     , f"{data_m['COG'       ]:.1f} °")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Day"     , monitoring["Day"])
+            st.metric("Date"    , monitoring["Date"])
+            st.metric("Time"    , monitoring["Time"])
+            st.metric("Position [x, y]", f"{monitoring['Position_X']:.0f}, {monitoring['Position_Y']:.0f}")
+        with col2:
+            st.metric("Lat/Long", f"{monitoring['Latitude'  ]:.2f}, {monitoring['Longitude']:.2f}")
+            st.metric("SOG Knot", f"{monitoring['SOG_knot'  ]:.1f} kn")
+            st.metric("SOG Km/h", f"{monitoring['SOG_kmh'   ]:.1f} km/h")
+            st.metric("COG"     , f"{monitoring['COG'       ]:.1f} °")
 
     # Vision
     with st.expander("Vision"):
-        c1, c2 = st.columns(2)
-        with c1:
-            st.metric("Green Ball Conf", f"{data_v['Greenball_conf']:.2f}")
-            st.metric("Red Ball Conf"  , f"{data_v['Redball_conf'  ]:.2f}")
-            st.metric("Mangrove Conf"  , f"{data_v['Mangrove_conf' ]:.2f}")
-            st.metric("Fish Conf"      , f"{data_v['Fish_conf'     ]:.2f}")
-        with c2:
-            st.metric("Green Ball Dist", f"{data_v['Greenball_dist']:.2f} m")
-            st.metric("Red Ball Dist"  , f"{data_v['Redball_dist'  ]:.2f} m")
-            st.metric("Mangrove Dist"  , f"{data_v['Mangrove_dist' ]:.2f} m")
-            st.metric("Fish Dist"      , f"{data_v['Fish_dist'     ]:.2f} m")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Green Ball Conf", f"{vision['Greenball_conf']:.2f}")
+            st.metric("Red Ball Conf"  , f"{vision['Redball_conf'  ]:.2f}")
+            st.metric("Mangrove Conf"  , f"{vision['Mangrove_conf' ]:.2f}")
+            st.metric("Fish Conf"      , f"{vision['Fish_conf'     ]:.2f}")
+        with col2:
+            st.metric("Green Ball Dist", f"{vision['Greenball_dist']:.2f} m")
+            st.metric("Red Ball Dist"  , f"{vision['Redball_dist'  ]:.2f} m")
+            st.metric("Mangrove Dist"  , f"{vision['Mangrove_dist' ]:.2f} m")
 
     # Autonomous
     with st.expander("Autonomous"):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("Left Thruster"  , f"{data_a['Left_thruster' ]:.0f} RPM")
-            st.metric("Left Servo"     , f"{data_a['Left_servo'    ]:.0f} °")
-        with c2:
-            st.metric("Bow Thruster"   , f"{data_a['Bow_thruster'  ]:.0f} RPM")
-            st.metric("Zone"           , data_a["Zone"])
-            st.metric("Command"        , data_a["Command"])
-        with c3:
-            st.metric("Right Thruster" , f"{data_a['Right_thruster']:.0f} RPM")
-            st.metric("Right Servo"    , f"{data_a['Right_servo'   ]:.0f} °")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Left Thruster"  , f"{autonomous['Left_thruster' ]:.0f} RPM")
+            st.metric("Left Servo"     , f"{autonomous['Left_servo'    ]:.0f} °")
+        with col2:
+            st.metric("Bow Thruster"   , f"{autonomous['Bow_thruster'  ]:.0f} RPM")
+            st.metric("Zone"           , autonomous["Zone"])
+            st.metric("Command"        , autonomous["Command"])
+        with col3:
+            st.metric("Right Thruster" , f"{autonomous['Right_thruster']:.0f} RPM")
+            st.metric("Right Servo"    , f"{autonomous['Right_servo'   ]:.0f} °")
 
     # Localization
     with st.expander("Localization"):
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric("GPS [x, y]", f"{data_m['Position_X']:.0f}, {data_m['Position_Y']:.0f}")
-        with c2:
-            st.metric("Yaw"      , f"{data_m['Yaw']:.1f} °")
-        with c3:
-            st.metric("ETC"      , f"{data_m['Etc']:.1f}")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("GPS [x, y]", f"{monitoring['Position_X']:.0f}, {monitoring['Position_Y']:.0f}")
+        with col2:
+            st.metric("Yaw"       , f"{monitoring['Yaw']:.1f} °")
+        with col3:
+            st.metric("ETC"       , f"{monitoring['Etc']:.1f}")
 
     # Hardware
     with st.expander("Hardware"):
-        bat_c1, bat_c2, bat_c3 = st.columns(3)
-        for i in range(5):
-            if i < 2:
-                bat_c1.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
-            elif i < 4:
-                bat_c2.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
-            else:
-                bat_c3.metric(f"Battery {i+1}", f"{data_m['Battery'][i]:.0f} %")
-
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Battery 1", f"{monitoring['Battery1']:.1f} %")    
+            st.metric("Battery 2", f"{monitoring['Battery2']:.1f} %")
+        with col2:
+            st.metric("Battery 3", f"{monitoring['Battery3']:.1f} %")    
+            st.metric("Battery 4", f"{monitoring['Battery4']:.1f} %")
+        with col3:
+            st.metric("Battery 5", f"{monitoring['Battery5']:.1f} %")    
